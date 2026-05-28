@@ -1,0 +1,56 @@
+---
+- name: Create runner tool cache directory
+  ansible.builtin.file:
+    path: "{{ runner_tool_cache_dir }}"
+    state: directory
+    owner: "{{ runner_user }}"
+    group: "{{ runner_user }}"
+    mode: "0755"
+
+- name: Create MinIO data directory
+  ansible.builtin.file:
+    path: "{{ minio_data_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install MinIO systemd service
+  ansible.builtin.template:
+    src: minio.service.j2
+    dest: /etc/systemd/system/minio.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Flush handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start MinIO
+  ansible.builtin.systemd:
+    name: minio
+    enabled: true
+    state: started
+
+- name: Wait for MinIO to be ready
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ minio_port }}"
+    delay: 2
+    timeout: 30
+
+- name: Download MinIO client
+  ansible.builtin.get_url:
+    url: https://dl.min.io/client/mc/release/linux-amd64/mc
+    dest: /usr/local/bin/mc
+    mode: "0755"
+
+- name: Create cache bucket
+  ansible.builtin.command:
+    cmd: /usr/local/bin/mc mb --ignore-existing "local/{{ minio_bucket }}"
+  environment:
+    MC_HOST_local: "http://{{ minio_access_key }}:{{ minio_secret_key }}@127.0.0.1:{{ minio_port }}"
+  register: mc_mb_result
+  changed_when: "'Created' in mc_mb_result.stdout"
+  failed_when: mc_mb_result.rc != 0

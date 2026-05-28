@@ -1,0 +1,20 @@
+---
+runner_user: sysadmin
+
+# Docker registry pull-through cache
+registry_mirror_port: 5000
+registry_mirror_cache_dir: /var/lib/registry
+
+# APT package cache
+apt_cache_port: 3142
+
+# MinIO (S3-compatible storage for build artifacts)
+minio_port: 9000
+minio_console_port: 9001
+minio_data_dir: /var/cache/minio
+minio_access_key: minioadmin     # change in production
+minio_secret_key: minioadmin     # change in production
+minio_bucket: gha-cache
+
+# Tool cache shared across runner jobs
+runner_tool_cache_dir: /opt/hostedtoolcache

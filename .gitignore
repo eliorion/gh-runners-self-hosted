@@ -1,0 +1,6 @@
+.env
+ansible/inventory/hosts.yaml
+*.retry
+__pycache__/
+*.pyc
+.ansible/

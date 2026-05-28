@@ -1,0 +1,39 @@
+---
+- name: Create registry data directory
+  ansible.builtin.file:
+    path: "{{ registry_mirror_cache_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install registry-mirror systemd service
+  ansible.builtin.template:
+    src: registry-mirror.service.j2
+    dest: /etc/systemd/system/registry-mirror.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Configure Docker daemon to use registry mirror
+  ansible.builtin.copy:
+    content: |
+      {
+        "registry-mirrors": ["http://127.0.0.1:{{ registry_mirror_port }}"],
+        "insecure-registries": ["127.0.0.1:{{ registry_mirror_port }}"]
+      }
+    dest: /etc/docker/daemon.json
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Docker
+
+- name: Flush handlers before starting registry
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start registry-mirror
+  ansible.builtin.systemd:
+    name: registry-mirror
+    enabled: true
+    state: started

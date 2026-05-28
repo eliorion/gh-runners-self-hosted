@@ -1,0 +1,23 @@
+---
+- name: Install sudo
+  ansible.builtin.apt:
+    name: sudo
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create sysadmin user
+  ansible.builtin.user:
+    name: sysadmin
+    shell: /bin/bash
+    create_home: true
+    state: present
+
+- name: Configure passwordless sudo for sysadmin
+  ansible.builtin.copy:
+    content: "sysadmin ALL=(ALL) NOPASSWD:ALL\n"
+    dest: /etc/sudoers.d/sysadmin
+    owner: root
+    group: root
+    mode: "0440"
+    validate: /usr/sbin/visudo -cf %s

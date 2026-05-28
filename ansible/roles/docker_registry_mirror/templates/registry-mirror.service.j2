@@ -1,0 +1,21 @@
+[Unit]
+Description=Docker Registry Mirror
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+Restart=on-failure
+RestartSec=5
+ExecStartPre=-/usr/bin/docker rm -f registry-mirror
+ExecStart=/usr/bin/docker run \
+  --name registry-mirror \
+  --network host \
+  -v {{ registry_mirror_cache_dir }}:/var/lib/registry \
+  -e REGISTRY_PROXY_REMOTEURL=https://registry-1.docker.io \
+  -e REGISTRY_HTTP_ADDR=127.0.0.1:{{ registry_mirror_port }} \
+  registry:2
+ExecStop=-/usr/bin/docker stop registry-mirror
+
+[Install]
+WantedBy=multi-user.target

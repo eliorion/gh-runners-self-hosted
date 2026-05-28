@@ -1,0 +1,10 @@
+---
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Restart runner service
+  ansible.builtin.systemd:
+    name: "github-runner-{{ runner_name_prefix }}-{{ runner_idx }}"
+    state: restarted
+  when: runner_config_stat.stat.exists

@@ -1,0 +1,6 @@
+[tools]
+gh = "latest"
+pre-commit = "latest"
+python = "latest"
+pipx = "latest"
+ansible = "latest"

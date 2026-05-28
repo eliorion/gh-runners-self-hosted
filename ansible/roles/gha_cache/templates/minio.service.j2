@@ -1,0 +1,23 @@
+[Unit]
+Description=MinIO S3-compatible Cache Server
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+Restart=on-failure
+RestartSec=5
+ExecStartPre=-/usr/bin/docker rm -f minio
+ExecStart=/usr/bin/docker run \
+  --name minio \
+  --network host \
+  -v {{ minio_data_dir }}:/data \
+  -e MINIO_ROOT_USER={{ minio_access_key }} \
+  -e MINIO_ROOT_PASSWORD={{ minio_secret_key }} \
+  minio/minio:latest server /data \
+  --address "127.0.0.1:{{ minio_port }}" \
+  --console-address "127.0.0.1:{{ minio_console_port }}"
+ExecStop=-/usr/bin/docker stop minio
+
+[Install]
+WantedBy=multi-user.target

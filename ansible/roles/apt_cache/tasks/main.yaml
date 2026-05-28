@@ -1,0 +1,34 @@
+---
+- name: Gather service facts
+  ansible.builtin.service_facts:
+
+- name: Remove proxy config if apt-cacher-ng not running
+  ansible.builtin.file:
+    path: /etc/apt/apt.conf.d/01proxy
+    state: absent
+  when: >
+    ansible_facts.services['apt-cacher-ng.service'] is not defined
+    or ansible_facts.services['apt-cacher-ng.service'].state != 'running'
+
+- name: Install apt-cacher-ng
+  ansible.builtin.apt:
+    name: apt-cacher-ng
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Enable and start apt-cacher-ng
+  ansible.builtin.systemd:
+    name: apt-cacher-ng
+    enabled: true
+    state: started
+
+- name: Configure APT to use local cache proxy
+  ansible.builtin.copy:
+    content: |
+      Acquire::http::Proxy "http://127.0.0.1:{{ apt_cache_port }}";
+      Acquire::https::Proxy "DIRECT";
+    dest: /etc/apt/apt.conf.d/01proxy
+    owner: root
+    group: root
+    mode: "0644"

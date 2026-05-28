@@ -1,0 +1,47 @@
+---
+- name: Set runner target URL
+  ansible.builtin.set_fact:
+    runner_url: >-
+      {{
+        'https://github.com/' + github_org
+        if runner_scope == 'org'
+        else 'https://github.com/' + github_repo
+      }}
+    runner_api_base: >-
+      {{
+        'https://api.github.com/orgs/' + github_org
+        if runner_scope == 'org'
+        else 'https://api.github.com/repos/' + github_repo
+      }}
+
+- name: Get latest runner version
+  ansible.builtin.uri:
+    url: https://api.github.com/repos/actions/runner/releases/latest
+    headers:
+      Authorization: "Bearer {{ github_token }}"
+      Accept: application/vnd.github+json
+  register: runner_release
+
+- name: Set runner version fact
+  ansible.builtin.set_fact:
+    runner_version: "{{ runner_release.json.tag_name | regex_replace('^v', '') }}"
+
+- name: Create runner install directory
+  ansible.builtin.file:
+    path: "{{ runner_install_dir }}"
+    state: directory
+    owner: "{{ runner_user }}"
+    group: "{{ runner_user }}"
+    mode: "0755"
+
+- name: Download runner tarball
+  ansible.builtin.get_url:
+    url: "https://github.com/actions/runner/releases/download/v{{ runner_version }}/actions-runner-linux-x64-{{ runner_version }}.tar.gz"
+    dest: "/tmp/actions-runner-{{ runner_version }}.tar.gz"
+    mode: "0644"
+
+- name: Configure runner instances
+  ansible.builtin.include_tasks: configure_runner.yaml
+  loop: "{{ range(1, runner_count | int + 1) | list }}"
+  loop_control:
+    loop_var: runner_idx

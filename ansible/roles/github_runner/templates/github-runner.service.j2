@@ -1,0 +1,16 @@
+[Unit]
+Description=GitHub Actions Runner {{ runner_name_prefix }}-{{ runner_idx }}
+After=docker.service network-online.target
+Wants=docker.service network-online.target
+
+[Service]
+Type=simple
+User={{ runner_user }}
+WorkingDirectory={{ runner_install_dir }}/{{ runner_name_prefix }}-{{ runner_idx }}
+ExecStart={{ runner_install_dir }}/{{ runner_name_prefix }}-{{ runner_idx }}/run.sh
+Restart=always
+RestartSec=5
+Environment=RUNNER_TOOL_CACHE={{ runner_tool_cache_dir }}
+
+[Install]
+WantedBy=multi-user.target

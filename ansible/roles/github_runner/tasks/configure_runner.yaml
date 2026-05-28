@@ -1,0 +1,86 @@
+---
+- name: Create runner instance directory
+  ansible.builtin.file:
+    path: "{{ runner_install_dir }}/{{ runner_name_prefix }}-{{ runner_idx }}"
+    state: directory
+    owner: "{{ runner_user }}"
+    group: "{{ runner_user }}"
+    mode: "0755"
+
+- name: Extract runner tarball
+  ansible.builtin.unarchive:
+    src: "/tmp/actions-runner-{{ runner_version }}.tar.gz"
+    dest: "{{ runner_install_dir }}/{{ runner_name_prefix }}-{{ runner_idx }}"
+    remote_src: true
+    creates: "{{ runner_install_dir }}/{{ runner_name_prefix }}-{{ runner_idx }}/run.sh"
+  become_user: "{{ runner_user }}"
+
+- name: Install runner system dependencies
+  ansible.builtin.command:
+    cmd: ./bin/installdependencies.sh
+    chdir: "{{ runner_install_dir }}/{{ runner_name_prefix }}-{{ runner_idx }}"
+  changed_when: false
+
+- name: Check if runner already configured
+  ansible.builtin.stat:
+    path: "{{ runner_install_dir }}/{{ runner_name_prefix }}-{{ runner_idx }}/.runner"
+  register: runner_config_stat
+
+- name: Read current runner config
+  ansible.builtin.slurp:
+    src: "{{ runner_install_dir }}/{{ runner_name_prefix }}-{{ runner_idx }}/.runner"
+  register: runner_config_file
+  when: runner_config_stat.stat.exists
+
+- name: Determine if reconfiguration needed
+  ansible.builtin.set_fact:
+    needs_configure: >-
+      {{
+        not runner_config_stat.stat.exists
+        or (runner_config_file.content | b64decode | replace('﻿', '') | from_json).gitHubUrl | lower != runner_url | lower
+      }}
+
+- name: Get registration token
+  ansible.builtin.uri:
+    url: "{{ runner_api_base }}/actions/runners/registration-token"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ github_token }}"
+      Accept: application/vnd.github+json
+    status_code: 201
+  register: reg_token
+  when: needs_configure
+
+- name: Configure runner
+  ansible.builtin.command:
+    cmd: >-
+      ./config.sh
+      --url {{ runner_url }}
+      --token {{ reg_token.json.token }}
+      --name {{ runner_name_prefix }}-{{ runner_idx }}
+      --labels {{ runner_labels }}
+      --unattended
+      --replace
+    chdir: "{{ runner_install_dir }}/{{ runner_name_prefix }}-{{ runner_idx }}"
+  become_user: "{{ runner_user }}"
+  when: needs_configure
+  changed_when: true
+  notify: Restart runner service
+
+- name: Install runner systemd service
+  ansible.builtin.template:
+    src: github-runner.service.j2
+    dest: "/etc/systemd/system/github-runner-{{ runner_name_prefix }}-{{ runner_idx }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Flush handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start runner service
+  ansible.builtin.systemd:
+    name: "github-runner-{{ runner_name_prefix }}-{{ runner_idx }}"
+    enabled: true
+    state: started

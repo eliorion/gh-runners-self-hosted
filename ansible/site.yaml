@@ -1,0 +1,12 @@
+---
+- name: Configure self-hosted GitHub runners
+  hosts: runners
+  become: true
+  roles:
+    - apt_cache
+    - common
+    - trivy
+    - docker
+    - docker_registry_mirror
+    - gha_cache
+    - github_runner

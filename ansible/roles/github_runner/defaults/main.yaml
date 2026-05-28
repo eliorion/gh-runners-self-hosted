@@ -1,0 +1,6 @@
+---
+runner_count: 2
+runner_scope: user           # "user" for all personal repos, "repo" for single repo
+runner_install_dir: /opt/github-runner
+runner_name_prefix: runner
+runner_labels: "self-hosted,linux,x64,debian"

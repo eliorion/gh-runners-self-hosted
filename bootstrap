@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+# Usage:
+#   ./bootstrap.sh --first-run   SSH as sysadmin, escalate via su (root password)
+#   ./bootstrap.sh               SSH as sysadmin, escalate via sudo NOPASSWD (after first run)
+#   ./bootstrap.sh [extra ansible-playbook flags...]
+set -euo pipefail
+
+# mise shims not inherited by non-interactive scripts
+export PATH="$HOME/.local/share/mise/shims:$PATH"
+
+FIRST_RUN=false
+if [[ "${1:-}" == "--first-run" ]]; then
+  FIRST_RUN=true
+  shift
+fi
+
+ENV_FILE=".env"
+
+if [[ ! -f "$ENV_FILE" ]]; then
+  echo "Error: .env not found." >&2
+  echo "Copy .env.example to .env and fill in your values." >&2
+  exit 1
+fi
+
+# shellcheck source=/dev/null
+source "$ENV_FILE"
+
+: "${VM_HOST:?VM_HOST not set in .env}"
+: "${VM_USER:?VM_USER not set in .env}"
+: "${GITHUB_TOKEN:?GITHUB_TOKEN not set — set it in your shell or devcontainer env}"
+SSH_PORT="${SSH_PORT:-22}"
+RUNNER_COUNT="${RUNNER_COUNT:-2}"
+RUNNER_SCOPE="${RUNNER_SCOPE:-user}"
+GITHUB_REPO="${GITHUB_REPO:-}"
+
+if [[ "$RUNNER_SCOPE" == "repo" && -z "$GITHUB_REPO" ]]; then
+  echo "Error: GITHUB_REPO must be set in .env when RUNNER_SCOPE=repo" >&2
+  exit 1
+fi
+
+if [[ -z "${SSH_AUTH_SOCK:-}" ]]; then
+  echo "Error: SSH_AUTH_SOCK is not set — SSH agent forwarding is not active." >&2
+  echo "Make sure your host SSH agent is running and the devcontainer has SSH_AUTH_SOCK forwarded." >&2
+  exit 1
+fi
+
+SSH_OPTS=(
+  -p "$SSH_PORT"
+  -o StrictHostKeyChecking=accept-new
+  -o ConnectTimeout=10
+)
+
+if $FIRST_RUN; then
+  echo "==> Authorizing SSH key on $VM_USER@$VM_HOST (enter sysadmin password)..."
+  ssh-copy-id -p "$SSH_PORT" "$VM_USER@$VM_HOST"
+fi
+
+echo "==> Checking SSH connectivity to $VM_USER@$VM_HOST:$SSH_PORT..."
+if ! ssh "${SSH_OPTS[@]}" "$VM_USER@$VM_HOST" "echo ok" &>/dev/null; then
+  echo "Error: Cannot reach $VM_HOST." >&2
+  echo "  - Check VM_HOST is the correct LAN IP" >&2
+  echo "  - Verify Tailscale subnet route is active on Proxmox" >&2
+  exit 1
+fi
+echo "    OK"
+
+echo "==> Ensuring Python3 on remote..."
+if $FIRST_RUN; then
+  # sysadmin has no sudo yet — use su to install python3 if missing
+  ssh "${SSH_OPTS[@]}" "$VM_USER@$VM_HOST" \
+    "which python3 > /dev/null 2>&1 || su -c 'apt-get install -y python3' root"
+else
+  ssh "${SSH_OPTS[@]}" "$VM_USER@$VM_HOST" \
+    "which python3 > /dev/null 2>&1 || sudo apt-get install -y python3"
+fi
+
+echo "==> Generating inventory..."
+mkdir -p ansible/inventory
+cat > ansible/inventory/hosts.yaml <<INVENTORY
+all:
+  children:
+    runners:
+      hosts:
+        runner:
+          ansible_host: ${VM_HOST}
+          ansible_user: ${VM_USER}
+          ansible_port: ${SSH_PORT}
+          ansible_ssh_common_args: '-o StrictHostKeyChecking=accept-new'
+INVENTORY
+
+echo "==> Running Ansible playbook..."
+if $FIRST_RUN; then
+  echo "    First run: privilege escalation via su (enter root password when prompted)"
+  ansible-playbook \
+    -i ansible/inventory/hosts.yaml \
+    ansible/site.yaml \
+    -e ansible_become_method=su \
+    -e ansible_become_user=root \
+    -e github_repo="${GITHUB_REPO}" \
+    -e github_token="${GITHUB_TOKEN}" \
+    -e runner_count="${RUNNER_COUNT}" \
+    -e runner_scope="${RUNNER_SCOPE}" \
+    --ask-become-pass \
+    "$@"
+else
+  ansible-playbook \
+    -i ansible/inventory/hosts.yaml \
+    ansible/site.yaml \
+    -e github_repo="${GITHUB_REPO}" \
+    -e github_token="${GITHUB_TOKEN}" \
+    -e runner_count="${RUNNER_COUNT}" \
+    -e runner_scope="${RUNNER_SCOPE}" \
+    "$@"
+fi
