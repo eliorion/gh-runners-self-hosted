@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Usage:
-#   ./bootstrap.sh --first-run   SSH as sysadmin, escalate via su (root password)
-#   ./bootstrap.sh               SSH as sysadmin, escalate via sudo NOPASSWD (after first run)
-#   ./bootstrap.sh [extra ansible-playbook flags...]
+#   ./bootstrap --first-run   SSH as sysadmin, escalate via su (root password)
+#   ./bootstrap               SSH as sysadmin, escalate via sudo NOPASSWD (after first run)
+#   ./bootstrap [extra ansible-playbook flags...]
 set -euo pipefail
 
 # mise shims not inherited by non-interactive scripts
@@ -30,7 +30,7 @@ source "$ENV_FILE"
 : "${GITHUB_TOKEN:?GITHUB_TOKEN not set — set it in your shell or devcontainer env}"
 SSH_PORT="${SSH_PORT:-22}"
 RUNNER_COUNT="${RUNNER_COUNT:-2}"
-RUNNER_SCOPE="${RUNNER_SCOPE:-user}"
+RUNNER_SCOPE="${RUNNER_SCOPE:-repo}"
 GITHUB_REPO="${GITHUB_REPO:-}"
 
 if [[ "$RUNNER_SCOPE" == "repo" && -z "$GITHUB_REPO" ]]; then
@@ -66,7 +66,6 @@ echo "    OK"
 
 echo "==> Ensuring Python3 on remote..."
 if $FIRST_RUN; then
-  # sysadmin has no sudo yet — use su to install python3 if missing
   ssh "${SSH_OPTS[@]}" "$VM_USER@$VM_HOST" \
     "which python3 > /dev/null 2>&1 || su -c 'apt-get install -y python3' root"
 else
@@ -74,41 +73,32 @@ else
     "which python3 > /dev/null 2>&1 || sudo apt-get install -y python3"
 fi
 
-echo "==> Generating inventory..."
-mkdir -p ansible/inventory
-cat > ansible/inventory/hosts.yaml <<INVENTORY
-all:
-  children:
-    runners:
-      hosts:
-        runner:
-          ansible_host: ${VM_HOST}
-          ansible_user: ${VM_USER}
-          ansible_port: ${SSH_PORT}
-          ansible_ssh_common_args: '-o StrictHostKeyChecking=accept-new'
-INVENTORY
+INVENTORY="${VM_HOST},"
+EXTRA_VARS=(
+  "ansible_user=${VM_USER}"
+  "ansible_port=${SSH_PORT}"
+  "ansible_ssh_common_args=-o StrictHostKeyChecking=accept-new"
+  "github_repo=${GITHUB_REPO}"
+  "github_token=${GITHUB_TOKEN}"
+  "runner_count=${RUNNER_COUNT}"
+  "runner_scope=${RUNNER_SCOPE}"
+)
 
 echo "==> Running Ansible playbook..."
 if $FIRST_RUN; then
   echo "    First run: privilege escalation via su (enter root password when prompted)"
   ansible-playbook \
-    -i ansible/inventory/hosts.yaml \
+    -i "$INVENTORY" \
     ansible/site.yaml \
+    "${EXTRA_VARS[@]/#/-e }" \
     -e ansible_become_method=su \
     -e ansible_become_user=root \
-    -e github_repo="${GITHUB_REPO}" \
-    -e github_token="${GITHUB_TOKEN}" \
-    -e runner_count="${RUNNER_COUNT}" \
-    -e runner_scope="${RUNNER_SCOPE}" \
     --ask-become-pass \
     "$@"
 else
   ansible-playbook \
-    -i ansible/inventory/hosts.yaml \
+    -i "$INVENTORY" \
     ansible/site.yaml \
-    -e github_repo="${GITHUB_REPO}" \
-    -e github_token="${GITHUB_TOKEN}" \
-    -e runner_count="${RUNNER_COUNT}" \
-    -e runner_scope="${RUNNER_SCOPE}" \
+    "${EXTRA_VARS[@]/#/-e }" \
     "$@"
 fi

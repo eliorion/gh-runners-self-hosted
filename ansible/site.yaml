@@ -1,6 +1,6 @@
 ---
 - name: Configure self-hosted GitHub runners
-  hosts: runners
+  hosts: all
   become: true
   roles:
     - apt_cache
