@@ -32,6 +32,8 @@ SSH_PORT="${SSH_PORT:-22}"
 RUNNER_COUNT="${RUNNER_COUNT:-2}"
 RUNNER_SCOPE="${RUNNER_SCOPE:-repo}"
 GITHUB_REPO="${GITHUB_REPO:-}"
+MINIO_ACCESS_KEY="${MINIO_ACCESS_KEY:-minioadmin}"
+MINIO_SECRET_KEY="${MINIO_SECRET_KEY:-minioadmin}"
 
 if [[ "$RUNNER_SCOPE" == "repo" && -z "$GITHUB_REPO" ]]; then
   echo "Error: GITHUB_REPO must be set in .env when RUNNER_SCOPE=repo" >&2
@@ -75,13 +77,14 @@ fi
 
 INVENTORY="${VM_HOST},"
 EXTRA_VARS=(
-  "ansible_user=${VM_USER}"
-  "ansible_port=${SSH_PORT}"
-  "ansible_ssh_common_args=-o StrictHostKeyChecking=accept-new"
-  "github_repo=${GITHUB_REPO}"
-  "github_token=${GITHUB_TOKEN}"
-  "runner_count=${RUNNER_COUNT}"
-  "runner_scope=${RUNNER_SCOPE}"
+  -e "ansible_user=${VM_USER}"
+  -e "ansible_port=${SSH_PORT}"
+  -e "github_repo=${GITHUB_REPO}"
+  -e "github_token=${GITHUB_TOKEN}"
+  -e "runner_count=${RUNNER_COUNT}"
+  -e "runner_scope=${RUNNER_SCOPE}"
+  -e "minio_access_key=${MINIO_ACCESS_KEY}"
+  -e "minio_secret_key=${MINIO_SECRET_KEY}"
 )
 
 echo "==> Running Ansible playbook..."
@@ -90,7 +93,7 @@ if $FIRST_RUN; then
   ansible-playbook \
     -i "$INVENTORY" \
     ansible/site.yaml \
-    "${EXTRA_VARS[@]/#/-e }" \
+    "${EXTRA_VARS[@]}" \
     -e ansible_become_method=su \
     -e ansible_become_user=root \
     --ask-become-pass \
@@ -99,6 +102,6 @@ else
   ansible-playbook \
     -i "$INVENTORY" \
     ansible/site.yaml \
-    "${EXTRA_VARS[@]/#/-e }" \
+    "${EXTRA_VARS[@]}" \
     "$@"
 fi

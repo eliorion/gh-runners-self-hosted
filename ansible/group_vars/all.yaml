@@ -12,8 +12,6 @@ apt_cache_port: 3142
 minio_port: 9000
 minio_console_port: 9001
 minio_data_dir: /var/cache/minio
-minio_access_key: minioadmin     # change in production
-minio_secret_key: minioadmin     # change in production
 minio_bucket: gha-cache
 
 # Tool cache shared across runner jobs

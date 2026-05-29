@@ -11,6 +11,9 @@ ExecStart={{ runner_install_dir }}/{{ runner_name_prefix }}-{{ runner_idx }}/run
 Restart=always
 RestartSec=5
 Environment=RUNNER_TOOL_CACHE={{ runner_tool_cache_dir }}
+Environment=ACTIONS_CACHE_URL=http://127.0.0.1:{{ minio_port }}/
+Environment=AWS_ACCESS_KEY_ID={{ minio_access_key }}
+Environment=AWS_SECRET_ACCESS_KEY={{ minio_secret_key }}
 
 [Install]
 WantedBy=multi-user.target
