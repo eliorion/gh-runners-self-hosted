@@ -1,0 +1,7 @@
+---
+- name: Download k3d binary
+  ansible.builtin.get_url:
+    url: "https://github.com/k3d-io/k3d/releases/download/v{{ k3d_version }}/k3d-linux-amd64"
+    dest: /usr/local/bin/k3d
+    mode: "0755"
+    force: false

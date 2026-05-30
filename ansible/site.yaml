@@ -7,6 +7,7 @@
     - common
     - trivy
     - docker
+    - k3d
     # - docker_registry_mirror
     # - gha_cache
     - github_runner

@@ -16,3 +16,6 @@ minio_bucket: gha-cache
 
 # Tool cache shared across runner jobs
 runner_tool_cache_dir: /opt/hostedtoolcache
+
+# k3d (Kubernetes in Docker for CI)
+k3d_version: "5.8.3"
